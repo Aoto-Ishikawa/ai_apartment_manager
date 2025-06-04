@@ -10,7 +10,7 @@ if (!process.env.API_KEY) {
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! }); 
 
 // Updated to allowed model name as per guidelines
-const TEXT_MODEL = 'gemini-2.5-flash-preview-04-17';
+const TEXT_MODEL = 'gemini-2.5-flash-preview-05-20';
 
 export async function summarizeText(
   fileContent: string, // これはプレーンテキストまたはbase64エンコードされたデータです
