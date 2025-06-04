@@ -1,0 +1,8 @@
+{
+  "name": "AI File Manager",
+  "description": "A smart file management application with AI-powered features like text summarization and intelligent search suggestions, allowing users to organize, find, and understand their files more efficiently.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "prompt": ""
+}
