@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, GenerateContentResponse, Part, Chat, Content } from "@google/genai";
 import { SummaryResult, FileSystemItem, FileType } from "./types";
+import { SUMMARIZABLE_MIME_TYPES } from "./constants"; // 定数からインポート
 
 // Initialize directly using process.env.API_KEY.
 // The prompt states "Assume this variable is pre-configured, valid, and accessible".
@@ -10,7 +11,8 @@ if (!process.env.API_KEY) {
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! }); 
 
 // Updated to allowed model name as per guidelines
-const TEXT_MODEL = 'gemini-2.5-flash-preview-05-20';
+const TEXT_MODEL = 'gemini-2.5-flash-preview-04-17';
+const MAX_CONTEXT_CHARS = 15000; // AIチャットのコンテキストに含める最大文字数
 
 export async function summarizeText(
   fileContent: string, // これはプレーンテキストまたはbase64エンコードされたデータです
@@ -117,9 +119,13 @@ export async function summarizeText(
 }
 
 function getSystemInstructionText(language: 'en' | 'ja'): string {
-  return language === 'ja' 
-    ? `あなたはファイル管理アシスタントです。提供されたファイルリストのコンテキストに基づいて、ユーザーの質問に答えてください。ファイルの内容に関する質問の場合は、その旨を伝え、ファイルを開いて確認するよう促してください。特定のファイル（PDF、DOCX、TXT、MDなど）の内容について尋ねられた場合、そのファイルを要約できることを伝えてください。`
-    : `You are a file management assistant. Answer the user's questions based on the provided file list context. If asked about file content, state that you can see file names and types, and suggest the user open the file to check its content. If asked about the content of specific files (like PDF, DOCX, TXT, MD), let them know you can summarize those files.`;
+  return language === 'ja'
+    ? `あなたはファイル管理アシスタントです。提供されたファイルリストやテキストファイル（TXT, MDなど）の内容に基づいて、ユーザーの質問に答えてください。
+PDFやDOCXのようなバイナリファイルの具体的な内容については、あなたが直接参照することはできません。しかし、それらのファイルが存在することをユーザーに伝え、個別に要約を依頼すれば内容を把握できることを示唆してください。
+ファイルの内容に関する一般的な質問には、提供されたテキストコンテンツの範囲で答えてください。`
+    : `You are a file management assistant. Answer user questions based on the provided file list and the content of text-based files (e.g., TXT, MD) given to you.
+For the specific content of binary files like PDF or DOCX, you cannot directly access their full content in this chat context. However, you should inform the user of their existence and suggest that you can summarize them individually if the user asks.
+Answer general questions about file content based on the textual content provided to you.`;
 }
 
 export function createAIChat(language: 'en' | 'ja'): Chat {
@@ -132,19 +138,69 @@ export function createAIChat(language: 'en' | 'ja'): Chat {
   });
 }
 
-function formatFileContextForAI(files: FileSystemItem[]): string {
-  if (files.length === 0) {
-    return "There are no files currently visible or matching the search criteria.";
+function formatMultipleFileContentsForAI(files: FileSystemItem[], language: 'en' | 'ja'): string {
+  let accumulatedContent = "";
+  let charCount = 0;
+  let filesIncludedCount = 0;
+
+  const relevantFiles = files.filter(
+    (file) =>
+      file.type === FileType.FILE &&
+      file.content &&
+      file.mimeType 
+      // SUMMARIZABLE_MIME_TYPES を使ってフィルタリングすると、PDF/DOCXも対象になるが、
+      // それらの内容はBase64なので、ここでは主にテキスト系を優先する
+  );
+
+  if (relevantFiles.length === 0) {
+    return language === 'ja'
+      ? "コンテキストに含めることができる内容を持つ関連ファイルが見つかりませんでした。"
+      : "No relevant files with content found to include in context.";
   }
-  const fileContextLimit = 10; // Limit the number of files sent in context for brevity
-  let context = "Here is a list of relevant files (name, type, last modified):\n";
-  files.slice(0, fileContextLimit).forEach(file => {
-    context += `- ${file.name} (${file.type}, ${new Date(file.lastModified).toLocaleDateString()})\n`;
-  });
-  if (files.length > fileContextLimit) {
-    context += `\n...and ${files.length - fileContextLimit} more files.`;
+
+  accumulatedContent += language === 'ja'
+    ? "以下のファイル情報を参考にして回答してください:\n\n"
+    : "Please use the following file information to answer:\n\n";
+
+  for (const file of relevantFiles) {
+    const fileHeader = `ファイル: ${file.name} (種類: ${file.mimeType})\n内容:\n`;
+    let fileContentForPrompt = "";
+
+    if (file.mimeType && (file.mimeType.startsWith('text/') || file.mimeType === 'text/markdown')) {
+      fileContentForPrompt = file.content || "";
+    } else if (file.mimeType && SUMMARIZABLE_MIME_TYPES.includes(file.mimeType)) {
+      // PDF, DOCXなど (SUMMARIZABLE_MIME_TYPESに含まれるがテキストではないもの)
+      fileContentForPrompt = language === 'ja'
+        ? `(${file.name} の内容はバイナリデータです。このファイルについて詳しく知りたい場合は、個別に要約を依頼してください。)`
+        : `(The content of ${file.name} is binary data. If you want to know more about this file, please ask for a specific summary.)`;
+    } else {
+      // その他の処理できないファイルタイプ
+      fileContentForPrompt = language === 'ja'
+        ? `(${file.name} の内容は表示できません。)`
+        : `(The content of ${file.name} cannot be displayed directly.)`;
+    }
+    
+    const currentFileChars = fileHeader.length + fileContentForPrompt.length + 2; // +2 for newlines
+
+    if (charCount + currentFileChars > MAX_CONTEXT_CHARS && filesIncludedCount > 0) {
+      accumulatedContent += language === 'ja'
+        ? `\n...さらに${relevantFiles.length - filesIncludedCount}個の関連ファイルがありますが、コンテキスト長の制限のため一部省略されました。`
+        : `\n...and ${relevantFiles.length - filesIncludedCount} more relevant files were omitted due to context length limits.`;
+      break;
+    }
+    
+    accumulatedContent += fileHeader + fileContentForPrompt + "\n\n";
+    charCount += currentFileChars;
+    filesIncludedCount++;
+
+    if (charCount >= MAX_CONTEXT_CHARS && filesIncludedCount < relevantFiles.length) {
+      accumulatedContent += language === 'ja'
+        ? `\n...さらに${relevantFiles.length - filesIncludedCount}個の関連ファイルがありますが、コンテキスト長の制限のため一部省略されました。`
+        : `\n...and ${relevantFiles.length - filesIncludedCount} more relevant files were omitted due to context length limits.`;
+      break;
+    }
   }
-  return context;
+  return accumulatedContent;
 }
 
 
@@ -159,8 +215,8 @@ export async function sendAIChatMessage(
     return language === 'ja' ? "AIチャットサービスは現在利用できません: APIキーが設定されていません。" : "AI Chat service unavailable: API key not configured.";
   }
 
-  const fileContext = formatFileContextForAI(currentFiles);
-  const messageTextForModel = `${userMessage}\n\nFile Context:\n${fileContext}`;
+  const fileContext = formatMultipleFileContentsForAI(currentFiles, language);
+  const messageTextForModel = `${userMessage}\n\n${fileContext}`;
     
   try {
     const response = await chat.sendMessage({ message: messageTextForModel });
@@ -168,9 +224,14 @@ export async function sendAIChatMessage(
   } catch (error) {
     console.error("Error sending message to AI Chat:", error);
 
-    // Check for specific error types if possible, e.g., rate limiting
-    if ((error as any)?.message?.includes('429')) { // Basic check for rate limit error
+    if ((error as any)?.message?.includes('429')) { 
         return language === 'ja' ? "リクエストが多すぎます。しばらくしてからもう一度お試しください。" : "Too many requests. Please try again later.";
+    }
+    // 他のエラータイプをここで確認できます。例えば、コンテキストが長すぎる場合など。
+    // (error as any)?.message?.toLowerCase().includes('context length')
+    // (error as any)?.message?.toLowerCase().includes('prompt is too long')
+    if ( (error as any)?.message?.toLowerCase().includes('prompt is too long') || (error as any)?.message?.toLowerCase().includes('context length')) {
+      return language === 'ja' ? "送信された情報が長すぎました。ファイル数を減らすか、より具体的な質問をしてください。" : "The provided information was too long. Please try with fewer files or a more specific question.";
     }
     return language === 'ja' ? "AIチャットでエラーが発生しました。" : "An error occurred with the AI chat.";
   }

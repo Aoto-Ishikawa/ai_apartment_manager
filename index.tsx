@@ -11,7 +11,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <LanguageProvider>
+    <LanguageProvider defaultLanguage="ja">
       <App />
     </LanguageProvider>
   </React.StrictMode>

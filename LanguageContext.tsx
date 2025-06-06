@@ -10,8 +10,16 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+interface LanguageProviderProps {
+  children: ReactNode;
+  defaultLanguage?: Language;
+}
+
+export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children, defaultLanguage }) => {
   const [language, setLanguageState] = useState<Language>(() => {
+    if (defaultLanguage) {
+      return defaultLanguage;
+    }
     const browserLang = navigator.language.split('-')[0];
     return browserLang === 'ja' ? 'ja' : 'en';
   });

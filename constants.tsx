@@ -6,14 +6,13 @@ import React from 'react';
 export const I18N_KEYS = {
   APP_NAME: "appName",
   SIGN_IN_WELCOME: "signInWelcome",
-  SIGN_IN_PROMPT: "signInPrompt",
   EMAIL_PLACEHOLDER: "emailPlaceholder",
   PASSWORD_PLACEHOLDER: "passwordPlaceholder",
   SIGN_IN_BUTTON: "signInButton",
   OR_DIVIDER: "orDivider",
   SIGN_IN_GOOGLE_BUTTON: "signInGoogleButton",
   FOLDER_EMPTY: "folderEmpty",
-  SEARCH_FILES_PLACEHOLDER: "searchFilesPlaceholder",
+  SEARCH_FILES_PLACEHOLDER: "searchFilesPlaceholder", // General search placeholder
   VOICE_START_TOOLTIP: "voiceStartTooltip",
   VOICE_STOP_TOOLTIP: "voiceStopTooltip",
   SUMMARY_MODAL_TITLE: "summaryModalTitle",
@@ -62,7 +61,7 @@ export const I18N_KEYS = {
   AI_CHAT_SEND_BUTTON: "aiChatSendButton",
   AI_CHAT_WELCOME: "aiChatWelcome",
   AI_CHAT_VOICE_TOOLTIP: "aiChatVoiceTooltip",
-  FILENAME_SEARCH_PLACEHOLDER: "filenameSearchPlaceholder",
+  FILENAME_SEARCH_PLACEHOLDER: "filenameSearchPlaceholder", // Specific for filename only
   DATE_RANGE_SR_LABEL_FROM: "dateRangeSrLabelFrom",
   DATE_RANGE_SR_LABEL_TO: "dateRangeSrLabelTo",
   DATE_FROM_PLACEHOLDER: "dateFromPlaceholder",
@@ -71,7 +70,7 @@ export const I18N_KEYS = {
   TOGGLE_FILTER_PANEL_SHOW: "toggleFilterPanelShow", 
   TOGGLE_FILTER_PANEL_HIDE: "toggleFilterPanelHide",   
   RESET_ALL_FILTERS_TOOLTIP: "resetAllFiltersTooltip",
-  DROP_FILES_HERE_PROMPT: "dropFilesHerePrompt", 
+  DROP_FILES_HERE_PROMPT: "dropFilesHerePrompt", // 古いオーバーレイ用、新しいコンポーネントでは未使用
   FILTER_BY_TYPE_SR_LABEL: "filterByTypeSrLabel",
   FILTER_BY_SIZE_SR_LABEL: "filterBySizeSrLabel",
   FILE_TYPE_ALL: "fileTypeAll",
@@ -91,6 +90,16 @@ export const I18N_KEYS = {
   UPLOAD_FILE_GENERIC_ERROR: "uploadFileGenericError",
   UPLOAD_COMPLETED_WITH_SKIPS: "uploadCompletedWithSkips",
   UPLOAD_FOLDER_CREATE_ERROR: "uploadFolderCreateError",
+  VIEW_RAW_CONTENT_MODAL_TITLE: "VIEW_RAW_CONTENT_MODAL_TITLE",
+  OPENING_FILE_BY_DOWNLOAD: "OPENING_FILE_BY_DOWNLOAD",
+  SORT_ORDER_ASC: "sortOrderAsc",
+  SORT_ORDER_DESC: "sortOrderDesc",
+  SORT_BY_NAME: "sortByName",
+  TOGGLE_SORT_ORDER_ARIA: "toggleSortOrderAria",
+  DROP_FILES_HERE_OR_CLICK_PROMPT_TITLE: "dropFilesHereOrClickPromptTitle",
+  DROP_FILES_HERE_OR_CLICK_PROMPT_SUBTITLE: "dropFilesHereOrClickPromptSubtitle",
+  UPLOAD_FOLDER_DRAGGED_DIRECTLY: "uploadFolderDraggedDirectly",
+  CLEAR_BUTTON: "clearButton", // New key for "Clear" button text
 };
 
 
@@ -163,7 +172,9 @@ export const Icons = {
   close: (props?: { className?: string }) => <IconBase iconName="close" className={props?.className} />,
   user: (props?: { className?: string }) => <IconBase iconName="person" className={props?.className} />,
   logout: (props?: { className?: string }) => <IconBase iconName="logout" className={props?.className} />,
-  drive: (props?: { className?: string }) => <IconBase iconName="folder_special" className={`text-sky-600 ${props?.className || ''}`} />,
+  drive: (props?: { className?: string }) => <IconBase iconName="folder_special" className={`text-sky-600 ${props?.className || ''}`} />, 
+  folderSpecial: (props?: { className?: string }) => <IconBase iconName="folder_special" className={`text-green-600 ${props?.className || ''}`} />, 
+  folderShared: (props?: { className?: string }) => <IconBase iconName="folder_shared" className={`text-green-600 ${props?.className || ''}`} />,
   menu: (props?: { className?: string }) => <IconBase iconName="more_vert" className={props?.className} />,
   edit: (props?: { className?: string }) => <IconBase iconName="edit" className={`text-blue-500 ${props?.className || ''}`} />,
   view: (props?: { className?: string }) => <IconBase iconName="visibility" className={`text-green-500 ${props?.className || ''}`} />,
@@ -173,13 +184,16 @@ export const Icons = {
   clear: (props?: { className?: string }) => <IconBase iconName="clear" className={props?.className} />, 
   filterList: (props?: { className?: string }) => <IconBase iconName="filter_list" className={props?.className} />, 
   filterListOff: (props?: { className?: string }) => <IconBase iconName="filter_list_off" className={props?.className} />, 
-  cached: (props?: { className?: string }) => <IconBase iconName="cached" className={props?.className} />,
+  cached: (props?: { className?: string }) => <IconBase iconName="cached" className={props?.className} />, 
   category: (props?: { className?: string }) => <IconBase iconName="category" className={props?.className} />, 
   storage: (props?: { className?: string }) => <IconBase iconName="storage" className={props?.className} />, 
   tune: (props?: { className?: string }) => <IconBase iconName="tune" className={props?.className} />, 
   errorOutline: (props?: { className?: string }) => <IconBase iconName="error_outline" className={`text-red-700 dark:text-red-200 ${props?.className || ''}`} />, 
   infoOutline: (props?: { className?: string }) => <IconBase iconName="info_outline" className={`text-blue-700 dark:text-blue-200 ${props?.className || ''}`} />, 
+  helpOutline: (props?: { className?: string }) => <IconBase iconName="help_outline" className={`text-yellow-500 ${props?.className || ''}`} />, 
   checkCircleOutline: (props?: { className?: string }) => <IconBase iconName="check_circle_outline" className={`text-green-700 dark:text-green-200 ${props?.className || ''}`} />,
+  arrowUpward: (props?: { className?: string }) => <IconBase iconName="arrow_upward" className={props?.className} />,
+  arrowDownward: (props?: { className?: string }) => <IconBase iconName="arrow_downward" className={props?.className} />,
   google: (props?: { className?: string }) => (
     <svg className={`w-5 h-5 ${props?.className || ''}`} viewBox="0 0 24 24" fill="currentColor">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -202,11 +216,11 @@ export const ALLOWED_UPLOAD_EXTENSIONS = [
   '.md',
   '.pdf', 
   '.docx',
-  '.csv', '.xls', '.xlsx', // スプレッドシート
-  '.ppt', '.pptx', // プレゼンテーション
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', // 画像
-  '.mp3', '.wav', '.ogg', // 音声
-  '.mp4', '.mov', '.avi', '.webm', // 動画
+  '.csv', '.xls', '.xlsx', 
+  '.ppt', '.pptx', 
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', 
+  '.mp3', '.wav', '.ogg', 
+  '.mp4', '.mov', '.avi', '.webm', 
 ];
 
 export const SUMMARIZABLE_MIME_TYPES = [
@@ -220,37 +234,34 @@ export const DOCUMENT_MIME_TYPES = [
   'text/plain',
   'text/markdown',
   'application/pdf',
-  'application/msword', // .doc
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-  'application/rtf', // .rtf
-  'application/vnd.oasis.opendocument.text', // .odt
+  'application/msword', 
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+  'application/rtf', 
+  'application/vnd.oasis.opendocument.text', 
 ];
 
 export const IMAGE_MIME_TYPES_PREFIX = 'image/'; 
 
 export const SPREADSHEET_MIME_TYPES = [
   'text/csv',
-  'application/vnd.ms-excel', // .xls
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-  'application/vnd.oasis.opendocument.spreadsheet', // .ods
+  'application/vnd.ms-excel', 
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+  'application/vnd.oasis.opendocument.spreadsheet', 
 ];
 
 export const PRESENTATION_MIME_TYPES = [
-  'application/vnd.ms-powerpoint', // .ppt
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-  'application/vnd.oasis.opendocument.presentation', // .odp
+  'application/vnd.ms-powerpoint', 
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
+  'application/vnd.oasis.opendocument.presentation', 
 ];
 
 export const AUDIO_MIME_TYPES_PREFIX = 'audio/';
 export const VIDEO_MIME_TYPES_PREFIX = 'video/';
 
-// ファイルサイズのしきい値 (バイト)
-export const FILE_SIZE_SMALL_MAX = 1 * 1024 * 1024; // 1MB
-export const FILE_SIZE_MEDIUM_MAX = 50 * 1024 * 1024; // 50MB
-export const FILE_SIZE_LARGE_MAX = 500 * 1024 * 1024; // 500MB
-// FILE_SIZE_LARGE_MAXを超えるものは「巨大」
+export const FILE_SIZE_SMALL_MAX = 1 * 1024 * 1024; 
+export const FILE_SIZE_MEDIUM_MAX = 50 * 1024 * 1024; 
+export const FILE_SIZE_LARGE_MAX = 500 * 1024 * 1024; 
 
-// file.typeを補完するための、アップロード用の既知のMIMEタイプロッピング
 export const KNOWN_EXTENSION_MIME_TYPES: Record<string, string> = {
   '.md': 'text/markdown',
   '.csv': 'text/csv',
@@ -260,5 +271,4 @@ export const KNOWN_EXTENSION_MIME_TYPES: Record<string, string> = {
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.ppt': 'application/vnd.ms-powerpoint',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  // file.typeが信頼できない場合に備えて、必要に応じてより一般的なタイプを追加
 };

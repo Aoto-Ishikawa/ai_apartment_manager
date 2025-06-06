@@ -328,7 +328,6 @@ export const Snackbar: React.FC<SnackbarProps> = ({ message, type, isOpen, onClo
       break;
   }
   
-  // テキストカラーの 'bg-' プレフィックスとアイコンカラーの 'text-' プレフィックスを削除します（これらは完全なクラス名であるため）
   const finalTextColor = textColor.replace(/^text-/, '');
   const finalBgColor = bgColor.replace(/^bg-/, '');
 
@@ -339,7 +338,7 @@ export const Snackbar: React.FC<SnackbarProps> = ({ message, type, isOpen, onClo
       aria-live={type === 'error' ? "assertive" : "polite"}
       className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] p-4 rounded-lg shadow-xl min-w-[300px] max-w-[calc(100%-40px)] flex items-center gap-3 animate-fadeInOut ${finalBgColor} ${finalTextColor}`}
       style={{
-        backgroundColor: `var(--tw-bg-${finalBgColor})`, // Tailwind JITが色を認識するようにする
+        backgroundColor: `var(--tw-bg-${finalBgColor})`, 
         color: `var(--tw-color-${finalTextColor})`,
         animation: 'fadeIn 0.5s ease-out forwards, fadeOut 0.5s ease-in 6.5s forwards'
       }}
@@ -377,7 +376,7 @@ export const Snackbar: React.FC<SnackbarProps> = ({ message, type, isOpen, onClo
 // 認証コンポーネント
 interface LoginScreenProps {
   onLogin: (user: User) => void;
-  onGoogleLogin: () => void; // シミュレート済み
+  onGoogleLogin: () => void; 
 }
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onGoogleLogin }) => {
   const { t } = useTranslation();
@@ -392,13 +391,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onGoogleLogin
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
       <div className={`${CommonStyles.card} w-full max-w-md text-center`}>
         <div className="flex justify-center items-center">
           <Icons.drive className="w-16 h-16 text-indigo-600" />
         </div>
-        <h1 className={`${CommonStyles.h1} mb-2`}>{t(I18N_KEYS.SIGN_IN_WELCOME)}</h1>
-        <p className={`${CommonStyles.textMuted} mb-8`}>{t(I18N_KEYS.SIGN_IN_PROMPT)}</p>
+        <h1 className={`${CommonStyles.h1} mb-8`}>{t(I18N_KEYS.SIGN_IN_WELCOME)}</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Input type="email" placeholder={t(I18N_KEYS.EMAIL_PLACEHOLDER)} value={email} onChange={(e) => setEmail(e.target.value)} required srLabel={t(I18N_KEYS.EMAIL_PLACEHOLDER)} />
           <Input type="password" placeholder={t(I18N_KEYS.PASSWORD_PLACEHOLDER)} value={password} onChange={(e) => setPassword(e.target.value)} required srLabel={t(I18N_KEYS.PASSWORD_PLACEHOLDER)} />
@@ -427,10 +425,11 @@ interface FileItemProps {
   onDownload?: (item: FileSystemItem) => void;
   isSelected: boolean;
   deletingItemId?: string | null;
+  showActions?: boolean; 
 }
 
 export const FileItem: React.FC<FileItemProps> = ({ 
-    item, onSelect, onOpen, onSummarize, onDelete, onDownload, isSelected, deletingItemId 
+    item, onSelect, onOpen, onSummarize, onDelete, onDownload, isSelected, deletingItemId, showActions = true
 }) => {
   const { t, locale } = useTranslation();
   const isDeleting = item.id === deletingItemId;
@@ -454,11 +453,17 @@ export const FileItem: React.FC<FileItemProps> = ({
     item.type === FileType.FILE &&
     !!item.mimeType &&
     SUMMARIZABLE_MIME_TYPES.includes(item.mimeType) &&
-    !!item.content; // コンテンツ（テキストまたはbase64）をロードする必要があります
+    !!item.content; 
+
+  const baseClasses = `flex items-center p-3 cursor-pointer transition-colors duration-150 group`;
+  const selectedClasses = isSelected ? `${ThemeColors.primaryContainer} ${ThemeColors.onPrimaryContainer}` : `hover:${ThemeColors.surfaceVariant} dark:hover:bg-slate-700`;
+  const deletingClasses = isDeleting ? 'opacity-70 cursor-wait' : '';
+  const newLayoutStyleClasses = !showActions ? 'border-b border-slate-200 dark:border-slate-700 rounded-none' : 'rounded-lg';
+
 
   return (
     <div 
-      className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors duration-150 group ${isSelected ? `${ThemeColors.primaryContainer} ${ThemeColors.onPrimaryContainer}` : `hover:${ThemeColors.surfaceVariant}`} ${isDeleting ? 'opacity-70 cursor-wait' : ''}`}
+      className={`${baseClasses} ${selectedClasses} ${deletingClasses} ${newLayoutStyleClasses}`}
       onClick={() => !isDeleting && onSelect(item)}
       onDoubleClick={() => !isDeleting && (item.type === FileType.FOLDER ? onOpen(item) : (item.type === FileType.FILE && onOpen(item)))}
       role="button"
@@ -467,50 +472,59 @@ export const FileItem: React.FC<FileItemProps> = ({
       aria-busy={isDeleting}
       onKeyDown={(e) => { if (!isDeleting && (e.key === 'Enter' || e.key === ' ')) { item.type === FileType.FOLDER ? onOpen(item) : (item.type === FileType.FILE && onOpen(item))}}}
     >
-      <div className="mr-3 text-2xl flex-shrink-0">{getIcon()}</div>
+      <div className="mr-3 text-xl flex-shrink-0">{getIcon()}</div> 
       <div className="flex-grow truncate">
         <p className="font-medium text-sm">{item.name}</p>
-        <p className={`text-xs ${CommonStyles.textMuted}`}>
-          {new Date(item.lastModified).toLocaleDateString(locale)}
-          {item.size != null && ` - ${(item.size / 1024).toFixed(1)} KB`}
-        </p>
-      </div>
-      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
-        {item.type === FileType.FILE && onDownload && (
-          <Button 
-            variant="icon" 
-            title={t(I18N_KEYS.DOWNLOAD_BUTTON_TOOLTIP)} 
-            onClick={(e) => {e.stopPropagation(); onDownload(item);}} 
-            srText={t(I18N_KEYS.DOWNLOAD_BUTTON_TOOLTIP) + ' ' + item.name}
-            disabled={isDeleting}
-          >
-            <Icons.download />
-          </Button>
+        {!showActions && item.type === FileType.FILE && item.size != null && ( 
+             <p className={`text-xs ${CommonStyles.textMuted}`}>
+                {(item.size / 1024).toFixed(1)} KB
+             </p>
         )}
-        {canSummarize && onSummarize && (
-          <Button 
-            variant="icon" 
-            title={t(I18N_KEYS.SUMMARIZE_BUTTON_TOOLTIP)} 
-            onClick={(e) => {e.stopPropagation(); onSummarize(item); }} 
-            srText={t(I18N_KEYS.SUMMARIZE_BUTTON_TOOLTIP) + ' ' + item.name}
-            disabled={isDeleting}
-          >
-            <Icons.summarize />
-          </Button>
-        )}
-        {onDelete && (
-           <Button 
-            variant="icon" 
-            title={t(I18N_KEYS.DELETE_BUTTON_TOOLTIP)} 
-            onClick={(e) => {e.stopPropagation(); onDelete(item); }} 
-            srText={t(I18N_KEYS.DELETE_BUTTON_TOOLTIP) + ' ' + item.name}
-            isLoading={isDeleting}
-            disabled={isDeleting}
-          >
-            {isDeleting ? null : <Icons.delete />} 
-          </Button>
+        {showActions && ( 
+            <p className={`text-xs ${CommonStyles.textMuted}`}>
+            {new Date(item.lastModified).toLocaleDateString(locale)}
+            {item.size != null && ` - ${(item.size / 1024).toFixed(1)} KB`}
+            </p>
         )}
       </div>
+      {showActions && (
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
+            {item.type === FileType.FILE && onDownload && (
+            <Button 
+                variant="icon" 
+                title={t(I18N_KEYS.DOWNLOAD_BUTTON_TOOLTIP)} 
+                onClick={(e) => {e.stopPropagation(); onDownload(item);}} 
+                srText={t(I18N_KEYS.DOWNLOAD_BUTTON_TOOLTIP) + ' ' + item.name}
+                disabled={isDeleting}
+            >
+                <Icons.download />
+            </Button>
+            )}
+            {canSummarize && onSummarize && (
+            <Button 
+                variant="icon" 
+                title={t(I18N_KEYS.SUMMARIZE_BUTTON_TOOLTIP)} 
+                onClick={(e) => {e.stopPropagation(); onSummarize(item); }} 
+                srText={t(I18N_KEYS.SUMMARIZE_BUTTON_TOOLTIP) + ' ' + item.name}
+                disabled={isDeleting}
+            >
+                <Icons.summarize />
+            </Button>
+            )}
+            {onDelete && (
+            <Button 
+                variant="icon" 
+                title={t(I18N_KEYS.DELETE_BUTTON_TOOLTIP)} 
+                onClick={(e) => {e.stopPropagation(); onDelete(item); }} 
+                srText={t(I18N_KEYS.DELETE_BUTTON_TOOLTIP) + ' ' + item.name}
+                isLoading={isDeleting}
+                disabled={isDeleting}
+            >
+                {isDeleting ? null : <Icons.delete />} 
+            </Button>
+            )}
+        </div>
+      )}
     </div>
   );
 };
@@ -525,15 +539,21 @@ interface FileListProps {
   onSummarizeItem?: ((item: FileSystemItem) => void) | false;
   onDeleteItem?: ((item: FileSystemItem) => void) | false;
   onDownloadItem?: ((item: FileSystemItem) => void) | false;
+  showItemActions?: boolean; 
 }
 
-export const FileList: React.FC<FileListProps> = ({ items, selectedItemId, deletingItemId, onSelectItem, onOpenItem, onSummarizeItem, onDeleteItem, onDownloadItem }) => {
+export const FileList: React.FC<FileListProps> = ({ 
+    items, selectedItemId, deletingItemId, onSelectItem, onOpenItem, 
+    onSummarizeItem, onDeleteItem, onDownloadItem, showItemActions = true 
+}) => {
   const { t } = useTranslation();
   if (items.length === 0) {
     return <div className={`text-center py-10 ${CommonStyles.textMuted}`}>{t(I18N_KEYS.FOLDER_EMPTY)}</div>;
   }
+  const containerClasses = !showItemActions ? "border-t border-slate-200 dark:border-slate-700" : "space-y-1 p-2";
+  
   return (
-    <div className="space-y-1 p-2" role="list" aria-label={t(I18N_KEYS.FILE_LIST_ARIA)}>
+    <div className={containerClasses} role="list" aria-label={t(I18N_KEYS.FILE_LIST_ARIA)}>
       {items.map(item => (
         <FileItem 
           key={item.id} 
@@ -545,6 +565,7 @@ export const FileList: React.FC<FileListProps> = ({ items, selectedItemId, delet
           onDownload={onDownloadItem || undefined}
           isSelected={item.id === selectedItemId}
           deletingItemId={deletingItemId}
+          showActions={showItemActions}
         />
       ))}
     </div>
@@ -575,7 +596,7 @@ export const FilenameSearchBar: React.FC<FilenameSearchBarProps> = ({ onSearch, 
       <Input 
         type="text"
         placeholder={t(I18N_KEYS.FILENAME_SEARCH_PLACEHOLDER)}
-        className="pl-12 pr-4 py-3 text-sm" // クリアボタンがなくなったため pr-10 を削除
+        className="pl-12 pr-4 py-3 text-sm" 
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         srLabel={t(I18N_KEYS.FILENAME_SEARCH_PLACEHOLDER)}
@@ -589,7 +610,6 @@ interface DateRangeFilterProps {
   endDate: string;
   onStartDateChange: (date: string) => void;
   onEndDateChange: (date: string) => void;
-  // onReset propは削除されました
 }
 export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({ startDate, endDate, onStartDateChange, onEndDateChange }) => {
     const { t } = useTranslation();
@@ -618,7 +638,6 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({ startDate, end
                     placeholder={t(I18N_KEYS.DATE_TO_PLACEHOLDER)}
                 />
             </div>
-            {/* リセットボタンはここから削除されました */}
         </div>
     );
 };
@@ -734,13 +753,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, onLogout }) => {
   const { t } = useTranslation();
   return (
     <div className="flex items-center space-x-3" aria-label={t(I18N_KEYS.USER_PROFILE_ARIA)}>
-      <div className={`p-2 rounded-full ${ThemeColors.primaryContainer}`}>
-        <Icons.user className={ThemeColors.onPrimaryContainer}/>
+      <div className={`flex items-center justify-center`}>
+        <Icons.user className={`${ThemeColors.onSurfaceVariant} w-5 h-5`}/>
       </div>
-      <div>
-        <p className="text-sm font-medium">{user.name || user.email}</p>
-        <button onClick={onLogout} className={`text-xs hover:underline ${CommonStyles.textMuted}`}>{t(I18N_KEYS.SIGN_OUT_BUTTON)}</button>
-      </div>
+      <button onClick={onLogout} className={`text-xs hover:underline ${CommonStyles.textMuted}`}>{t(I18N_KEYS.SIGN_OUT_BUTTON)}</button>
     </div>
   );
 };
@@ -819,10 +835,142 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
             </Button>
           )}
           <Button variant="primary" onClick={handleSend} isLoading={isSending} iconLeft={<Icons.send />} srText={t(I18N_KEYS.AI_CHAT_SEND_BUTTON)}>
-             {/* 小さな画面や十分なスペースがない場合にテキストを非表示にしますか？ 現時点では常に表示します。 */}
           </Button>
         </div>
       </div>
     </Modal>
+  );
+};
+
+interface RawContentViewerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  file: FileSystemItem | null;
+  modalClassName?: string;
+}
+
+export const RawContentViewerModal: React.FC<RawContentViewerModalProps> = ({ isOpen, onClose, file, modalClassName }) => {
+  const { t } = useTranslation();
+
+  if (!isOpen || !file) return null;
+
+  const title = t(I18N_KEYS.VIEW_RAW_CONTENT_MODAL_TITLE, { fileName: file.name });
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} modalClassName={modalClassName || "max-w-2xl"}>
+      <div className="max-h-[70vh] overflow-y-auto custom-scrollbar p-1">
+        {file.mimeType?.startsWith('text/') && file.content && (
+          <pre className="text-sm whitespace-pre-wrap break-words bg-slate-50 dark:bg-slate-800 p-4 rounded-md">{file.content}</pre>
+        )}
+        {file.mimeType?.startsWith('image/') && file.content && (
+          <img 
+            src={`data:${file.mimeType};base64,${file.content}`} 
+            alt={file.name} 
+            className="max-w-full h-auto rounded-md"
+          />
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+interface FileUploadAreaProps {
+  onFileUpload: (files: FileList | null) => void;
+  onFileUploadFromDrop: (dataTransfer: DataTransfer | null) => void;
+  isUploading: boolean;
+  targetDirectoryName: string;
+  className?: string;
+}
+
+export const FileUploadArea: React.FC<FileUploadAreaProps> = ({
+  onFileUpload,
+  onFileUploadFromDrop,
+  isUploading,
+  targetDirectoryName,
+  className
+}) => {
+  const { t } = useTranslation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingOverSelf, setIsDraggingOverSelf] = useState(false);
+
+  const handleAreaClick = () => {
+    if (!isUploading && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      onFileUpload(event.target.files);
+    }
+     // Reset file input to allow uploading the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isUploading) {
+      setIsDraggingOverSelf(true);
+    }
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOverSelf(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOverSelf(false);
+    if (!isUploading) {
+      onFileUploadFromDrop(event.dataTransfer);
+    }
+  };
+  
+  const baseBorderColor = "border-slate-300 dark:border-slate-600";
+  const draggingBorderColor = "border-indigo-500 dark:border-indigo-400";
+  const baseTextColor = "text-slate-500 dark:text-slate-400";
+  const draggingTextColor = "text-indigo-600 dark:text-indigo-400";
+
+  return (
+    <div
+      className={`relative p-6 border-2 border-dashed rounded-lg text-center cursor-pointer 
+                  transition-all duration-200 ease-in-out 
+                  ${isDraggingOverSelf ? `bg-indigo-50 dark:bg-indigo-900/30 ${draggingBorderColor}` : `hover:bg-slate-50 dark:hover:bg-slate-800/50 ${baseBorderColor}`}
+                  ${isUploading ? 'opacity-60 cursor-not-allowed' : ''}
+                  ${className || ''}`}
+      onClick={handleAreaClick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      aria-disabled={isUploading}
+      role="button"
+      tabIndex={isUploading ? -1 : 0}
+      onKeyDown={(e) => { if (!isUploading && (e.key === 'Enter' || e.key === ' ')) handleAreaClick();}}
+    >
+      <input
+        type="file"
+        multiple
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        className="hidden"
+        disabled={isUploading}
+        accept={(window as any).ALLOWED_UPLOAD_EXTENSIONS?.join(',') || '*/*'} // Fallback
+      />
+      <div className="flex flex-col items-center justify-center pointer-events-none">
+        <Icons.upload className={`w-12 h-12 mb-3 ${isDraggingOverSelf ? draggingTextColor : baseTextColor}`} />
+        <p className={`text-lg font-medium mb-1 ${isDraggingOverSelf ? draggingTextColor : ThemeColors.onSurface}`}>
+          {t(I18N_KEYS.DROP_FILES_HERE_OR_CLICK_PROMPT_TITLE)}
+        </p>
+        <p className={`text-xs ${baseTextColor}`}>
+          {t(I18N_KEYS.DROP_FILES_HERE_OR_CLICK_PROMPT_SUBTITLE, { folderName: targetDirectoryName })}
+        </p>
+      </div>
+    </div>
   );
 };

@@ -1,3 +1,4 @@
+
 // Speech API 型宣言
 interface SpeechRecognitionEvent extends Event {
   readonly resultIndex: number;
@@ -131,7 +132,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { User, View, FileSystemItem, FileType, SummaryResult, BreadcrumbItem, AccessLevel, AIChatMessage, FileTypeFilterOption, FileSizeFilterOption } from './types';
 import { 
   LoginScreen, FileList, FilenameSearchBar, DateRangeFilter, SummaryModal, CreateFolderModal, Button, 
-  UserProfile, BreadcrumbsDisplay, AIChatModal, Snackbar, SelectFilter, ConfirmationModal
+  UserProfile, BreadcrumbsDisplay, AIChatModal, Snackbar, SelectFilter, ConfirmationModal, RawContentViewerModal,
+  FileUploadArea, Input // Added Input here
 } from './components';
 import { 
     CommonStyles, Icons, ThemeColors, I18N_KEYS, ALLOWED_UPLOAD_EXTENSIONS, SUMMARIZABLE_MIME_TYPES,
@@ -180,7 +182,7 @@ type SnackbarMessage = {
 
 
 const App: React.FC = () => {
-  const { t, language, setLanguage, locale } = useTranslation();
+  const { t, language, setLanguage, locale } = useTranslation(); // setLanguage is no longer used from UI
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>(View.LOGIN);
@@ -191,11 +193,11 @@ const App: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<FileSystemItem | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [filenameSearchTerm, setFilenameSearchTerm] = useState<string>('');
+  // Filters below are kept in state but UI for them is removed for now
   const [startDateFilter, setStartDateFilter] = useState<string>('');
   const [endDateFilter, setEndDateFilter] = useState<string>('');
   const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilterOption>('all');
   const [fileSizeFilter, setFileSizeFilter] = useState<FileSizeFilterOption>('all');
-  const [isFilterPanelVisible, setIsFilterPanelVisible] = useState<boolean>(false);
   
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [summaryContent, setSummaryContent] = useState<SummaryResult | null>(null);
@@ -213,13 +215,20 @@ const App: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const voiceInputTargetRef = useRef<'filename' | 'aichat' | null>(null);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [snackbar, setSnackbar] = useState<SnackbarMessage | null>(null);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [itemToConfirmDelete, setItemToConfirmDelete] = useState<FileSystemItem | null>(null);
+
+  const [isRawContentViewerOpen, setIsRawContentViewerOpen] = useState(false);
+  const [rawContentFile, setRawContentFile] = useState<FileSystemItem | null>(null);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ 
+    key: 'name' as 'name' | 'lastModified' | 'size', 
+    direction: 'asc' as 'asc' | 'desc' 
+  });
 
 
   const showSnackbar = (message: string, type: SnackbarMessage['type'] = 'info') => {
@@ -230,13 +239,6 @@ const App: React.FC = () => {
     setSnackbar(null);
   };
 
-  useEffect(() => {
-    if (fileInputRef.current && currentUser) { 
-      const extensions = ALLOWED_UPLOAD_EXTENSIONS.join(',');
-      fileInputRef.current.accept = extensions;
-    }
-  }, [currentUser]); 
-
 
   useEffect(() => {
     if (!currentUser) {
@@ -245,17 +247,17 @@ const App: React.FC = () => {
       setAiChatMessages([]);
       setAiChatHistory([]);
     } else {
-      aiChatInstanceRef.current = createAIChat(language);
+      aiChatInstanceRef.current = createAIChat('ja'); // Default to Japanese
       setAiChatMessages([]); 
       setAiChatHistory([]); 
     }
-  }, [currentUser, language]);
+  }, [currentUser]); // language removed as it's fixed to 'ja'
 
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setCurrentView(View.FILE_EXPLORER);
-    setAllItems([]); 
+    setAllItems([]); // Remove initial sample data
     setCurrentPathId(null); 
     setSelectedItem(null);
     setFilenameSearchTerm('');
@@ -263,7 +265,8 @@ const App: React.FC = () => {
     setEndDateFilter('');
     setFileTypeFilter('all');
     setFileSizeFilter('all');
-    setIsFilterPanelVisible(false);
+    setIsSidebarOpen(true); // Ensure sidebar is open on login
+    setSortConfig({ key: 'name', direction: 'asc' }); // Reset sort on login
   };
 
   const handleLogout = () => {
@@ -277,7 +280,6 @@ const App: React.FC = () => {
     setEndDateFilter('');
     setFileTypeFilter('all');
     setFileSizeFilter('all');
-    setIsFilterPanelVisible(false);
   };
 
   const handleSelectItem = (item: FileSystemItem) => {
@@ -289,15 +291,39 @@ const App: React.FC = () => {
       setCurrentPathId(item.id);
       setSelectedItem(null); 
       setFilenameSearchTerm(''); 
-    } else {
-      console.log("Opening file:", item.name);
-      const isSummarizableType = item.mimeType && SUMMARIZABLE_MIME_TYPES.includes(item.mimeType);
-      if (isSummarizableType && item.content) {
-        handleSummarizeItem(item); 
-      } else if (item.mimeType && !item.mimeType.startsWith('text/') && !isSummarizableType) {
-        showSnackbar(t(I18N_KEYS.OPEN_FILE_NON_TEXT_SIMULATION, { fileName: item.name }), 'info');
+    } else { // File
+      const isSummarizable = item.mimeType && SUMMARIZABLE_MIME_TYPES.includes(item.mimeType) && !!item.content;
+      const isText = item.mimeType?.startsWith('text/') && !!item.content;
+      const isImage = item.mimeType?.startsWith('image/') && !!item.content;
+      const isPdf = item.mimeType === 'application/pdf' && !!item.content;
+
+      if (isSummarizable) {
+        handleSummarizeItem(item);
+      } else if (isText) {
+        setRawContentFile(item);
+        setIsRawContentViewerOpen(true);
+      } else if (isImage) {
+        setRawContentFile(item);
+        setIsRawContentViewerOpen(true);
+      } else if (isPdf) {
+        try {
+            const byteCharacters = base64ToUint8Array(item.content!);
+            const blob = new Blob([byteCharacters], { type: item.mimeType });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            URL.revokeObjectURL(url); // Clean up
+        } catch (e) {
+            console.error("Error opening PDF:", e);
+            showSnackbar(t(I18N_KEYS.OPEN_FILE_ERROR, {fileName: item.name}), 'error');
+        }
       } else {
-         showSnackbar(t(I18N_KEYS.OPEN_FILE_ERROR, {fileName: item.name}), 'error');
+        // Fallback to download for other types or if content missing for specific viewers
+        if (item.content) {
+             showSnackbar(t(I18N_KEYS.OPENING_FILE_BY_DOWNLOAD, { fileName: item.name }), 'info');
+            handleDownloadItem(item);
+        } else {
+            showSnackbar(t(I18N_KEYS.OPEN_FILE_ERROR, {fileName: item.name}), 'error');
+        }
       }
     }
   };
@@ -387,18 +413,31 @@ const App: React.FC = () => {
     });
   };
 
-  const handleFileUpload = async (eventOrFiles: React.ChangeEvent<HTMLInputElement> | FileList) => {
-    const files = 'length' in eventOrFiles ? eventOrFiles : eventOrFiles.target.files; 
+ const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0 || !currentUser || isUploading) return;
 
     setIsUploading(true);
     let skippedCount = 0;
-    
-    try {
-        for (let i = 0; i < files.length; i++) {
-            const success = await processAndAddFile(files[i]);
-            if (!success) skippedCount++;
+    const processingPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isDirectoryPlaceholder = file.type === "" && file.size % 4096 === 0; // Heuristic for directories
+        if (isDirectoryPlaceholder) { // Placeholder for directory, try to process via webkitGetAsEntry if available
+            // This path is more for completeness if DataTransferItem was a File, but usually handled by webkitGetAsEntry directly
+            showSnackbar(t(I18N_KEYS.UPLOAD_FOLDER_DRAGGED_DIRECTLY), 'info'); // Add this I18N key
+            skippedCount++;
+            continue;
         }
+        processingPromises.push(
+            processAndAddFile(file).then(success => {
+                if (!success) skippedCount++;
+            })
+        );
+    }
+
+    try {
+        await Promise.all(processingPromises);
     } catch (error) {
         console.error("Error during file upload process:", error);
         showSnackbar(t(I18N_KEYS.UPLOAD_FILE_GENERIC_ERROR, {fileName: "multiple files"}), 'error');
@@ -406,12 +445,10 @@ const App: React.FC = () => {
         if (skippedCount > 0) {
             showSnackbar(t(I18N_KEYS.UPLOAD_COMPLETED_WITH_SKIPS, { skippedCount }), 'error');
         }
-        if (fileInputRef.current && 'target' in eventOrFiles) { 
-            fileInputRef.current.value = "";
-        }
         setIsUploading(false);
     }
   };
+
 
   const handleCreateFolder = (name: string) => {
     if (currentUser) {
@@ -430,11 +467,8 @@ const App: React.FC = () => {
     setIsCreateFolderModalOpen(false);
   };
 
-  const handleDeleteItem = (itemToDelete: FileSystemItem) => {
-    if (!currentUser || itemToDelete.ownerId !== currentUser.id) {
-      showSnackbar(t(I18N_KEYS.DELETE_ERROR_PERMISSION), 'error');
-      return;
-    }
+  const handleDeleteItem = (itemToDelete: FileSystemItem | null) => {
+    if (!itemToDelete) return;
     setItemToConfirmDelete(itemToDelete);
     setIsConfirmModalOpen(true);
   };
@@ -446,7 +480,6 @@ const App: React.FC = () => {
     setIsConfirmModalOpen(false);
 
     try {
-      // 現実的なローディングのためにネットワーク遅延をシミュレートします
       await new Promise(resolve => setTimeout(resolve, 500));
 
       setAllItems(prevItems => {
@@ -472,7 +505,6 @@ const App: React.FC = () => {
       if (selectedItem?.id === itemToConfirmDelete.id || (itemToConfirmDelete.type === FileType.FOLDER && selectedItem?.parentId === itemToConfirmDelete.id)) {
         setSelectedItem(null);
       }
-      // 現在のフォルダを削除する場合、親フォルダまたはルートに移動します
       if (currentPathId === itemToConfirmDelete.id && itemToConfirmDelete.type === FileType.FOLDER) {
         setCurrentPathId(itemToConfirmDelete.parentId);
       }
@@ -483,6 +515,7 @@ const App: React.FC = () => {
     } finally {
       setDeletingItemId(null);
       setItemToConfirmDelete(null);
+      setSelectedItem(null); // Deselect item after deletion attempt
     }
   };
 
@@ -492,7 +525,7 @@ const App: React.FC = () => {
     const isSummarizable = itemToSummarize.type === FileType.FILE &&
                            itemToSummarize.mimeType &&
                            SUMMARIZABLE_MIME_TYPES.includes(itemToSummarize.mimeType) &&
-                           !!itemToSummarize.content; // コンテンツ（テキストまたはbase64）をロードする必要があります
+                           !!itemToSummarize.content; 
 
     if (!isSummarizable) {
       showSnackbar(t(I18N_KEYS.SUMMARIZE_UNSUPPORTED_OR_NO_CONTENT, { fileName: itemToSummarize.name }), 'error');
@@ -504,7 +537,7 @@ const App: React.FC = () => {
     setIsSummarizing(true);
     setSummaryContent(null); 
 
-    const summary = await summarizeText(itemToSummarize.content!, itemToSummarize.mimeType!, language);
+    const summary = await summarizeText(itemToSummarize.content!, itemToSummarize.mimeType!, 'ja'); // Fixed to 'ja'
     setSummaryContent(summary);
     setIsSummarizing(false);
   };
@@ -540,159 +573,91 @@ const App: React.FC = () => {
     URL.revokeObjectURL(link.href);
   };
 
-
-  const handleFilenameSearch = (term: string) => {
+  const breadcrumbs: BreadcrumbItem[] = useMemo(() => {
+    const path: BreadcrumbItem[] = [];
+    let tempCurrentFolderId = currentPathId;
+    while (tempCurrentFolderId) {
+      const folder = allItems.find(item => item.id === tempCurrentFolderId);
+      if (folder) {
+        path.unshift({ id: folder.id, name: folder.name });
+        tempCurrentFolderId = folder.parentId;
+      } else {
+        tempCurrentFolderId = null; 
+      }
+    }
+    return path;
+  }, [currentPathId, allItems]);
+  
+  const handleFilenameSearchChange = (term: string) => {
     setFilenameSearchTerm(term);
-  };
-
-  const handleResetAllFilters = () => {
-    setFilenameSearchTerm('');
-    setStartDateFilter('');
-    setEndDateFilter('');
-    setFileTypeFilter('all');
-    setFileSizeFilter('all');
+    if (term) {
+      setCurrentPathId(null); // Search globally
+    } else {
+      // If search is cleared, return to the folder pointed by the last breadcrumb, or root if no breadcrumbs
+      const lastBreadcrumbId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : null;
+      setCurrentPathId(lastBreadcrumbId);
+    }
   };
   
-  const displayedItems = allItems.filter(item => {
-    let matchesCurrentPath = true;
-    if (filenameSearchTerm) {
-      // ファイル名検索語がある場合は、すべてのアイテムを検索します。
-    } else {
-        matchesCurrentPath = item.parentId === currentPathId;
-    }
-    
-    if (!filenameSearchTerm && !matchesCurrentPath) return false;
-
+  const displayedItems = useMemo(() => allItems.filter(item => {
+    let matchesCurrentPathOrSearch = filenameSearchTerm ? true : item.parentId === currentPathId;
+    if (!matchesCurrentPathOrSearch) return false;
     const matchesFilename = !filenameSearchTerm || item.name.toLowerCase().includes(filenameSearchTerm.toLowerCase());
-    
-    let matchesDate = true;
-    if (isFilterPanelVisible) { 
-        if (startDateFilter) {
-          const startDateTime = new Date(startDateFilter);
-          startDateTime.setHours(0,0,0,0); 
-          matchesDate = matchesDate && item.lastModified >= startDateTime.getTime();
-        }
-        if (endDateFilter) {
-          const endDateTime = new Date(endDateFilter);
-          endDateTime.setHours(23, 59, 59, 999); 
-          matchesDate = matchesDate && item.lastModified <= endDateTime.getTime();
-        }
-    }
-    
-    let matchesType = true;
-    if (isFilterPanelVisible && fileTypeFilter !== 'all') { 
-      if (fileTypeFilter === 'folders') {
-        matchesType = item.type === FileType.FOLDER;
-      } else if (item.type === FileType.FILE) {
-        const mime = item.mimeType?.toLowerCase() || '';
-        switch (fileTypeFilter) {
-          case 'documents':
-            matchesType = DOCUMENT_MIME_TYPES.includes(mime);
-            break;
-          case 'images':
-            matchesType = mime.startsWith(IMAGE_MIME_TYPES_PREFIX);
-            break;
-          case 'spreadsheets':
-            matchesType = SPREADSHEET_MIME_TYPES.includes(mime);
-            break;
-          case 'presentations':
-            matchesType = PRESENTATION_MIME_TYPES.includes(mime);
-            break;
-          case 'audio':
-            matchesType = mime.startsWith(AUDIO_MIME_TYPES_PREFIX);
-            break;
-          case 'video':
-            matchesType = mime.startsWith(VIDEO_MIME_TYPES_PREFIX);
-            break;
-          case 'other':
-            matchesType = !DOCUMENT_MIME_TYPES.includes(mime) &&
-                          !mime.startsWith(IMAGE_MIME_TYPES_PREFIX) &&
-                          !SPREADSHEET_MIME_TYPES.includes(mime) &&
-                          !PRESENTATION_MIME_TYPES.includes(mime) &&
-                          !mime.startsWith(AUDIO_MIME_TYPES_PREFIX) &&
-                          !mime.startsWith(VIDEO_MIME_TYPES_PREFIX);
-            break;
-          default: matchesType = true;
-        }
-      } else { 
-        matchesType = false;
-      }
-    }
-
-    let matchesSize = true;
-    if (isFilterPanelVisible && fileSizeFilter !== 'all' && item.type === FileType.FILE) { 
-      const size = item.size ?? 0;
-      switch (fileSizeFilter) {
-        case 'small':
-          matchesSize = size < FILE_SIZE_SMALL_MAX;
-          break;
-        case 'medium':
-          matchesSize = size >= FILE_SIZE_SMALL_MAX && size < FILE_SIZE_MEDIUM_MAX;
-          break;
-        case 'large':
-          matchesSize = size >= FILE_SIZE_MEDIUM_MAX && size < FILE_SIZE_LARGE_MAX;
-          break;
-        case 'huge':
-          matchesSize = size >= FILE_SIZE_LARGE_MAX;
-          break;
-      }
-    }
-
-    return matchesFilename && matchesDate && matchesType && matchesSize;
-
+    // Other filters (date, type, size) are currently not used in UI but logic remains
+    return matchesFilename;
   }).sort((a, b) => { 
     if (a.type === FileType.FOLDER && b.type === FileType.FILE) return -1;
     if (a.type === FileType.FILE && b.type === FileType.FOLDER) return 1;
-    return a.name.localeCompare(b.name, language === 'ja' ? 'ja' : 'en');
-  });
+
+    const valA = (a[sortConfig.key] || '').toString().toLowerCase();
+    const valB = (b[sortConfig.key] || '').toString().toLowerCase();
+    
+    let comparison = 0;
+    if (valA < valB) {
+      comparison = -1;
+    } else if (valA > valB) {
+      comparison = 1;
+    }
+    return sortConfig.direction === 'asc' ? comparison : comparison * -1;
+  }), [allItems, filenameSearchTerm, currentPathId, sortConfig]);
 
 
   const handleSendAIChatMessageCallback = useCallback(async (messageText: string) => {
     if (!aiChatInstanceRef.current || !messageText.trim()) return;
 
     const userMessageForUI: AIChatMessage = { role: 'user', text: messageText.trim() };
-    const userContentForHistoryUpdate: Content = { role: 'user', parts: [{ text: messageText.trim() }] };
-
     setAiChatMessages(prev => [...prev, userMessageForUI]);
     setIsSendingAIChatMessage(true);
 
-    const relevantFilesForContext = filenameSearchTerm || 
-                                   (isFilterPanelVisible && (startDateFilter || endDateFilter || fileTypeFilter !== 'all' || fileSizeFilter !== 'all'))
-      ? displayedItems 
-      : allItems.filter(item => item.parentId === currentPathId);
+    const relevantFilesForContext = filenameSearchTerm ? displayedItems : allItems.filter(item => item.parentId === currentPathId);
 
     const responseText = await sendAIChatMessage(
         aiChatInstanceRef.current, 
         messageText.trim(), 
         relevantFilesForContext,
-        language
+        'ja' // Fixed to 'ja'
     );
     
     if (responseText) {
       const modelMessageForUI: AIChatMessage = { role: 'model', text: responseText };
-      const modelContentForHistoryUpdate: Content = { role: 'model', parts: [{ text: responseText }] };
       setAiChatMessages(prev => [...prev, modelMessageForUI]);
-      setAiChatHistory(prevHistory => [...prevHistory, userContentForHistoryUpdate, modelContentForHistoryUpdate]); 
     } else {
       const errorMessageForUI: AIChatMessage = { role: 'model', text: t(I18N_KEYS.SUMMARY_ERROR) }; 
       setAiChatMessages(prev => [...prev, errorMessageForUI]);
     }
     setIsSendingAIChatMessage(false);
-  }, [aiChatInstanceRef, filenameSearchTerm, isFilterPanelVisible, startDateFilter, endDateFilter, fileTypeFilter, fileSizeFilter, displayedItems, allItems, currentPathId, t, language]); 
+  }, [aiChatInstanceRef, filenameSearchTerm, displayedItems, allItems, currentPathId, t]); 
   
   const handleSendAIChatMessage = handleSendAIChatMessageCallback;
   const handleSendAIChatMessageRef = useRef(handleSendAIChatMessage);
-  useEffect(() => {
-    handleSendAIChatMessageRef.current = handleSendAIChatMessage;
-  }, [handleSendAIChatMessage]);
+  useEffect(() => { handleSendAIChatMessageRef.current = handleSendAIChatMessage; }, [handleSendAIChatMessage]);
   
   const startListening = useCallback((target: 'filename' | 'aichat') => {
     if (recognition && !isListening) {
       try {
         voiceInputTargetRef.current = target;
-        recognition.lang = language === 'ja' ? 'ja-JP' : 'en-US';
-        recognition.start();
-        setIsListening(true);
+        recognition.lang = 'ja-JP'; // Fixed to Japanese
+        recognition.start(); setIsListening(true);
       } catch(e) {
         console.error("Speech recognition start error:", e);
         setIsListening(false); 
@@ -701,24 +666,16 @@ const App: React.FC = () => {
     } else if (!recognition) {
       showSnackbar(t(I18N_KEYS.VOICE_RECOGNITION_NOT_SUPPORTED), 'error');
     }
-  }, [isListening, language, t]);
+  }, [isListening, t]);
 
-  const stopListening = useCallback(() => {
-    if (recognition && isListening) {
-      recognition.stop();
-    }
-  }, [isListening]);
+  const stopListening = useCallback(() => { if (recognition && isListening) { recognition.stop(); } }, [isListening]);
 
   useEffect(() => {
     if (!recognition) return;
-
     const handleResult = (event: SpeechRecognitionEvent) => {
       const transcriptResult = event.results[0][0].transcript;
-      if (voiceInputTargetRef.current === 'aichat') {
-        handleSendAIChatMessageRef.current?.(transcriptResult);
-      } else if (voiceInputTargetRef.current === 'filename') {
-        setFilenameSearchTerm(transcriptResult);
-      }
+      if (voiceInputTargetRef.current === 'aichat') { handleSendAIChatMessageRef.current?.(transcriptResult); }
+      else if (voiceInputTargetRef.current === 'filename') { handleFilenameSearchChange(transcriptResult); }
     };
     const handleError = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error', event.error, event.message);
@@ -726,207 +683,140 @@ const App: React.FC = () => {
         showSnackbar(t(I18N_KEYS.VOICE_RECOGNITION_ERROR_DETAIL, {error: event.error}), 'error');
       }
     };
-    const handleEnd = () => {
-        setIsListening(false); 
-        voiceInputTargetRef.current = null;
-    };
+    const handleEnd = () => { setIsListening(false); voiceInputTargetRef.current = null; };
 
     recognition.addEventListener('result', handleResult as EventListener);
     recognition.addEventListener('error', handleError as EventListener);
     recognition.addEventListener('end', handleEnd);
-
     return () => {
       recognition.removeEventListener('result', handleResult as EventListener);
       recognition.removeEventListener('error', handleError as EventListener);
       recognition.removeEventListener('end', handleEnd);
-      if (recognition && isListening) { 
-        recognition.abort(); 
-      }
+      if (recognition && isListening) { recognition.abort(); }
     };
-  }, [isListening, t, language]); 
+  }, [isListening, t, handleFilenameSearchChange]); 
 
-
-  const breadcrumbs: BreadcrumbItem[] = [];
-  if (!filenameSearchTerm) { 
-    let currentFolderId = currentPathId;
-    while (currentFolderId) {
-      const folder = allItems.find(item => item.id === currentFolderId);
-      if (folder) {
-        breadcrumbs.unshift({ id: folder.id, name: folder.name });
-        currentFolderId = folder.parentId;
-      } else {
-        currentFolderId = null; 
-      }
-    }
-  }
 
   const readAllDirectoryEntries = async (directoryReader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> => {
     return new Promise((resolve, reject) => {
       const entries: FileSystemEntry[] = [];
       const readEntriesBatch = () => {
-        directoryReader.readEntries(
-          (batch) => {
-            if (batch.length === 0) {
-              resolve(entries);
-            } else {
-              entries.push(...batch);
-              readEntriesBatch(); 
-            }
-          },
-          (err) => reject(err)
+        directoryReader.readEntries( (batch) => {
+            if (batch.length === 0) { resolve(entries); } 
+            else { entries.push(...batch); readEntriesBatch(); }
+          }, (err) => reject(err)
         );
       };
       readEntriesBatch();
     });
   };
   
-  const processDirectoryEntry = async (
-    directoryEntry: FileSystemDirectoryEntry,
-    parentId: string | null
-  ): Promise<number> => {
+  const processDirectoryEntry = async (dirEntry: FileSystemDirectoryEntry, parentId: string | null): Promise<number> => {
     if (!currentUser) return 0;
-    let skippedFilesInThisDirectory = 0;
+    let skippedCount = 0;
   
     const newFolder: FileSystemItem = {
-      id: 'folder-' + Date.now() + '-' + directoryEntry.name.replace(/[^a-zA-Z0-9]/g, '') + '-' + Math.random().toString(36).substring(2, 7),
-      name: directoryEntry.name,
-      type: FileType.FOLDER,
-      parentId: parentId,
-      lastModified: Date.now(), 
-      ownerId: currentUser.id,
-      access: AccessLevel.OWNER,
-      size: 0, 
+      id: 'folder-' + Date.now() + '-' + dirEntry.name.replace(/[^a-zA-Z0-9]/g, '') + '-' + Math.random().toString(36).substring(2, 7),
+      name: dirEntry.name, type: FileType.FOLDER, parentId: parentId,
+      lastModified: Date.now(), ownerId: currentUser.id, access: AccessLevel.OWNER, size: 0, 
     };
     setAllItems(prev => [...prev, newFolder]);
   
     try {
-      const directoryReader = directoryEntry.createReader();
-      const entries = await readAllDirectoryEntries(directoryReader);
-  
+      const reader = dirEntry.createReader(); const entries = await readAllDirectoryEntries(reader);
       for (const entry of entries) {
         if (entry.isFile) {
-          const fileEntry = entry as unknown as FileSystemFileEntry;
-          const success: boolean = await new Promise<boolean>((resolveFilePromise) => {
-            fileEntry.file(
-              async (file) => {
-                const added = await processAndAddFile(file, newFolder.id);
-                resolveFilePromise(added);
-              },
-              (err) => {
-                console.error(`Error getting file from entry: ${entry.name}`, err);
-                showSnackbar(t(I18N_KEYS.UPLOAD_FILE_GENERIC_ERROR, {fileName: entry.name}), 'error');
-                resolveFilePromise(false); 
-              }
+          const fileEntry = entry as unknown as FileSystemFileEntry; 
+          const success: boolean = await new Promise<boolean>((resolveFile) => {
+            fileEntry.file( async (file) => {
+                const added = await processAndAddFile(file, newFolder.id); resolveFile(added);
+              }, (err) => { console.error(`Error getting file: ${entry.name}`, err); showSnackbar(t(I18N_KEYS.UPLOAD_FILE_GENERIC_ERROR, {fileName: entry.name}), 'error'); resolveFile(false); }
             );
           });
-          if (!success) {
-            skippedFilesInThisDirectory++;
-          }
+          if (!success) skippedCount++;
         } else if (entry.isDirectory) {
-          const subDirSkippedCount = await processDirectoryEntry(entry as unknown as FileSystemDirectoryEntry, newFolder.id);
-          skippedFilesInThisDirectory += subDirSkippedCount;
+          const subSkipped = await processDirectoryEntry(entry as unknown as FileSystemDirectoryEntry, newFolder.id); 
+          skippedCount += subSkipped;
         }
       }
     } catch (error) {
-      console.error(`Error processing directory ${directoryEntry.name}:`, error);
-      showSnackbar(t(I18N_KEYS.UPLOAD_FOLDER_CREATE_ERROR, { folderName: directoryEntry.name }), 'error');
-      skippedFilesInThisDirectory++; 
+      console.error(`Error processing dir ${dirEntry.name}:`, error);
+      showSnackbar(t(I18N_KEYS.UPLOAD_FOLDER_CREATE_ERROR, { folderName: dirEntry.name }), 'error');
+      skippedCount++; 
     }
-    return skippedFilesInThisDirectory;
+    return skippedCount;
   };
 
 
-  const handleDragOver = (event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!isUploading) { // アップロード中でない場合にのみドラッグUIを表示
-        setIsDraggingOver(true);
-    }
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setIsDraggingOver(false);
-  };
-
-  const handleDrop = async (event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setIsDraggingOver(false);
-    if (!currentUser || isUploading) return; // アップロード中の場合はドロップを防止
-  
-    const dataTransferItems = event.dataTransfer.items;
-    if (!dataTransferItems || dataTransferItems.length === 0) return;
+  const handleFileUploadFromDrop = async (dataTransfer: DataTransfer | null) => {
+    if (!dataTransfer || !dataTransfer.items || dataTransfer.items.length === 0 || !currentUser || isUploading) return;
 
     setIsUploading(true);
-    let totalSkippedFiles = 0;
+    let totalSkipped = 0;
     const processingPromises: Promise<void>[] = [];
-  
-    for (let i = 0; i < dataTransferItems.length; i++) {
-      const entry = dataTransferItems[i].webkitGetAsEntry();
-      if (entry) {
-        if (entry.isFile) {
-          const fileEntry = entry as unknown as FileSystemFileEntry;
-          processingPromises.push(new Promise<void>((resolvePromise) => {
-            fileEntry.file(
-              async (file) => {
-                const added = await processAndAddFile(file, currentPathId);
-                if (!added) totalSkippedFiles++;
-                resolvePromise();
-              },
-              (err) => {
-                console.error(`Error getting file from file entry: ${entry.name}`, err);
-                showSnackbar(t(I18N_KEYS.UPLOAD_FILE_GENERIC_ERROR, {fileName: entry.name}), 'error');
-                totalSkippedFiles++;
-                resolvePromise();
-              }
-            );
-          }));
-        } else if (entry.isDirectory) {
-          processingPromises.push(
-            processDirectoryEntry(entry as unknown as FileSystemDirectoryEntry, currentPathId)
-              .then(skippedCountInDir => { totalSkippedFiles += skippedCountInDir; })
-          );
+
+    for (let i = 0; i < dataTransfer.items.length; i++) {
+        const entry = dataTransfer.items[i].webkitGetAsEntry();
+        if (entry) {
+            if (entry.isFile) {
+                const fileEntry = entry as unknown as FileSystemFileEntry;
+                processingPromises.push(
+                    new Promise<void>((resolve) => {
+                        fileEntry.file(
+                            async (file) => {
+                                const added = await processAndAddFile(file, currentPathId);
+                                if (!added) totalSkipped++;
+                                resolve();
+                            },
+                            (err) => {
+                                console.error(`Error dropping file: ${entry.name}`, err);
+                                showSnackbar(t(I18N_KEYS.UPLOAD_FILE_GENERIC_ERROR, {fileName: entry.name}), 'error');
+                                totalSkipped++;
+                                resolve();
+                            }
+                        );
+                    })
+                );
+            } else if (entry.isDirectory) {
+                processingPromises.push(
+                    processDirectoryEntry(entry as unknown as FileSystemDirectoryEntry, currentPathId).then(skipped => {
+                        totalSkipped += skipped;
+                    })
+                );
+            }
+        } else { // Fallback for browsers that don't support webkitGetAsEntry well for DataTransfer.files
+            const file = dataTransfer.files[i];
+             if(file) { // Ensure file is not null
+                processingPromises.push(
+                    processAndAddFile(file, currentPathId).then(success => {
+                        if (!success) totalSkipped++;
+                    })
+                );
+            }
         }
-      }
     }
-    
+
     try {
         await Promise.all(processingPromises);
     } catch (error) {
-        console.error("Error during drag and drop processing:", error);
+        console.error("Error during D&D file processing:", error);
         showSnackbar(t(I18N_KEYS.UPLOAD_FILE_GENERIC_ERROR, {fileName: "dragged items"}), 'error');
     } finally {
-        if (totalSkippedFiles > 0) {
-            showSnackbar(t(I18N_KEYS.UPLOAD_COMPLETED_WITH_SKIPS, { skippedCount: totalSkippedFiles }), 'error');
-        } else if (dataTransferItems.length > 0 && processingPromises.length > 0) {
-            // 必要に応じて成功メッセージをオプションで表示します。
+        if (totalSkipped > 0) {
+            showSnackbar(t(I18N_KEYS.UPLOAD_COMPLETED_WITH_SKIPS, { skippedCount: totalSkipped }), 'error');
         }
         setIsUploading(false);
     }
-  };
+};
   
+  const sidebarNavItems = [
+    { id: 'storage', labelKey: 'データ保存箱', icon: <Icons.folderSpecial className="w-5 h-5" /> }, 
+  ];
+  const activeNavItemId = 'storage'; 
 
-  const fileTypeFilterOptions = useMemo(() => [
-    { value: 'all', label: t(I18N_KEYS.FILE_TYPE_ALL) },
-    { value: 'folders', label: t(I18N_KEYS.FILE_TYPE_FOLDERS) },
-    { value: 'documents', label: t(I18N_KEYS.FILE_TYPE_DOCUMENTS) },
-    { value: 'images', label: t(I18N_KEYS.FILE_TYPE_IMAGES) },
-    { value: 'spreadsheets', label: t(I18N_KEYS.FILE_TYPE_SPREADSHEETS) },
-    { value: 'presentations', label: t(I18N_KEYS.FILE_TYPE_PRESENTATIONS) },
-    { value: 'audio', label: t(I18N_KEYS.FILE_TYPE_AUDIO) },
-    { value: 'video', label: t(I18N_KEYS.FILE_TYPE_VIDEO) },
-    { value: 'other', label: t(I18N_KEYS.FILE_TYPE_OTHER) },
-  ], [t]);
-
-  const fileSizeFilterOptions = useMemo(() => [
-    { value: 'all', label: t(I18N_KEYS.FILE_SIZE_ALL) },
-    { value: 'small', label: t(I18N_KEYS.FILE_SIZE_SMALL) },
-    { value: 'medium', label: t(I18N_KEYS.FILE_SIZE_MEDIUM) },
-    { value: 'large', label: t(I18N_KEYS.FILE_SIZE_LARGE) },
-    { value: 'huge', label: t(I18N_KEYS.FILE_SIZE_HUGE) },
-  ], [t]);
+  const currentFolderName = filenameSearchTerm 
+    ? t('searchResultsHeading', { searchTerm: filenameSearchTerm}) // Use translation for search results
+    : (breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length -1].name : t(I18N_KEYS.MY_DRIVE));
 
 
   if (currentView === View.LOGIN || !currentUser) {
@@ -936,159 +826,204 @@ const App: React.FC = () => {
                 onLogin={handleLogin} 
                 onGoogleLogin={() => showSnackbar(t(I18N_KEYS.GOOGLE_SIGN_IN_DEMO), 'info')} 
             />
-            {snackbar && (
-              <Snackbar
-                key={snackbar.key}
-                message={snackbar.message}
-                type={snackbar.type}
-                isOpen={!!snackbar}
-                onClose={closeSnackbar}
-              />
-            )}
+            {snackbar && (<Snackbar key={snackbar.key} message={snackbar.message} type={snackbar.type} isOpen={!!snackbar} onClose={closeSnackbar}/>)}
         </>
     );
   }
 
+  const toggleSortDirection = () => {
+    setSortConfig(prev => ({
+        ...prev,
+        direction: prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   return (
-    <div className={`flex flex-col h-screen ${ThemeColors.surface} ${ThemeColors.onSurface} overflow-hidden`}>
-      <header className={`p-4 border-b ${ThemeColors.outline} shadow-sm sticky top-0 z-20 ${ThemeColors.surface} flex flex-col gap-3`}>
-        <div className="flex justify-between items-center w-full">
-          <div className="flex items-center">
-            <Icons.drive className="w-8 h-8 text-indigo-600" />
-            <h1 className="text-xl font-semibold ml-3">{t(I18N_KEYS.APP_NAME)}</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <select 
-              value={language} 
-              onChange={(e) => setLanguage(e.target.value as 'en' | 'ja')}
-              className={`p-2 rounded-md ${ThemeColors.surfaceVariant} ${ThemeColors.onSurfaceVariant} text-sm focus:ring-1 focus:ring-indigo-500 outline-none ${CommonStyles.dateInput}`}
-              aria-label="Select language"
-            >
-              <option value="en">EN</option>
-              <option value="ja">JA</option>
-            </select>
+    <div className="flex h-screen antialiased text-slate-900 bg-white dark:text-slate-50 dark:bg-slate-900">
+      {/* Sidebar */}
+      {isSidebarOpen && (
+        <div className="w-60 bg-[#006C4A] text-white flex flex-col fixed inset-y-0 left-0 z-30 shadow-lg">
+            <div className="p-4 border-b border-green-700 flex justify-between items-center">
+            <span className="text-xl font-semibold">マンション管理</span>
+            <Button variant="icon" onClick={() => setIsSidebarOpen(false)} className="text-white hover:bg-green-800">
+                <Icons.close />
+            </Button>
+            </div>
+            <nav className="flex-grow p-2 space-y-1">
+            {sidebarNavItems.map(item => (
+                <button
+                key={item.id}
+                onClick={() => {
+                    if (item.id === 'storage') {
+                    setCurrentPathId(null);
+                    setFilenameSearchTerm('');
+                    setSelectedItem(null);
+                    } else {
+                    showSnackbar(`"${item.labelKey}" へのナビゲーションは実装されていません。`, 'info'); // Hardcoded Japanese
+                    }
+                }}
+                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors
+                            ${item.id === activeNavItemId 
+                                ? 'bg-[#00875A] text-white' 
+                                : 'text-green-100 hover:bg-green-800 hover:text-white'}`}
+                >
+                {item.icon}
+                <span>{item.labelKey}</span>
+                </button>
+            ))}
+            </nav>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-60' : 'ml-0'}`}>
+        <header className={`p-3 border-b ${ThemeColors.outline} shadow-sm sticky top-0 z-20 bg-white dark:bg-slate-800 flex items-center justify-end space-x-4`}>
+            {!isSidebarOpen && (
+                <Button 
+                    variant="icon" 
+                    onClick={() => setIsSidebarOpen(true)} 
+                    className="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 mr-auto" /* Changed: Added mr-auto */
+                    srText="サイドバーを開く" // Hardcoded Japanese
+                >
+                    <Icons.menu />
+                </Button>
+            )}
+             <span className='text-sm text-slate-700 dark:text-slate-200 mr-2'>{currentUser?.email || 'User'}</span> {/* Moved and styled */}
             {currentUser && <UserProfile user={currentUser} onLogout={handleLogout} />}
-          </div>
+        </header>
+        
+        <div className={`p-4 border-b ${ThemeColors.outline} flex justify-between items-center bg-white dark:bg-slate-800`}>
+            <div className="flex items-center space-x-2">
+                <Icons.folderSpecial className="w-7 h-7 text-green-600" /> 
+                <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100">データ保存箱</h1>
+            </div>
+            <div className="flex items-center space-x-2">
+                <div className="relative w-48"> {/* Container for search input and icon */}
+                    <div className={`absolute left-3 top-1/2 -translate-y-[calc(50%+1px)] text-slate-400 dark:text-slate-500`} aria-hidden="true"> {/* Adjusted icon position & color */}
+                        <Icons.search className="w-4 h-4" />
+                    </div>
+                    <Input
+                        type="text"
+                        placeholder="検索..." // Hardcoded Japanese
+                        value={filenameSearchTerm}
+                        onChange={(e) => handleFilenameSearchChange(e.target.value)}
+                        className="!py-2 !text-sm pl-9 pr-3 h-9 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 border-slate-300 dark:border-slate-600 focus:ring-indigo-500 focus:border-indigo-500" // Changed background and text colors
+                        srLabel="ファイル名で検索" // Hardcoded Japanese
+                    />
+                </div>
+                <Button 
+                    variant="secondary" 
+                    onClick={() => setIsCreateFolderModalOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 h-9"
+                >
+                    +
+                </Button>
+                {selectedItem && selectedItem.type === FileType.FILE && selectedItem.content && (
+                     <Button 
+                        variant="icon" 
+                        onClick={() => handleDownloadItem(selectedItem)}
+                        className="bg-teal-500 hover:bg-teal-600 text-white !p-0 w-9 h-9 flex items-center justify-center"
+                        title={t(I18N_KEYS.DOWNLOAD_BUTTON_TOOLTIP)}
+                        srText={t(I18N_KEYS.DOWNLOAD_BUTTON_TOOLTIP) + (selectedItem ? ' ' + selectedItem.name : '')}
+                    >
+                        <Icons.download className="w-4 h-4"/>
+                    </Button>
+                )}
+                {selectedItem && (
+                     <Button 
+                        variant="icon" 
+                        onClick={() => handleDeleteItem(selectedItem)}
+                        className="bg-red-600 hover:bg-red-700 text-white !p-0 w-9 h-9 flex items-center justify-center"
+                        title={t(I18N_KEYS.DELETE_BUTTON_TOOLTIP)}
+                        srText={t(I18N_KEYS.DELETE_BUTTON_TOOLTIP) + (selectedItem ? ' ' + selectedItem.name : '')}
+                        disabled={deletingItemId === selectedItem.id}
+                    >
+                        <Icons.delete className="w-4 h-4"/>
+                    </Button>
+                )}
+            </div>
         </div>
 
-        <div 
-          className={`flex flex-col gap-3 p-3 rounded-lg ${ThemeColors.surfaceVariant} w-full`} 
-          role="search" 
-          aria-label={t(I18N_KEYS.FILTER_ARIA_LABEL)}
-        >
-          {/* --- 上段: 検索とトグル --- */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
-            <div className="flex-grow min-w-[200px] sm:min-w-[250px]">
-              <FilenameSearchBar 
-                onSearch={handleFilenameSearch}
-                initialTerm={filenameSearchTerm}
-              />
-            </div>
-            <Button
-              onClick={() => setIsFilterPanelVisible(!isFilterPanelVisible)}
-              iconLeft={<Icons.tune className={`${isFilterPanelVisible ? ThemeColors.onPrimaryContainer : ''} w-7 h-7`} />}
-              className={`${CommonStyles.buttonSecondary} w-full sm:w-auto whitespace-nowrap flex-shrink-0`}
-            >
-              {isFilterPanelVisible ? t(I18N_KEYS.TOGGLE_FILTER_PANEL_HIDE) : t(I18N_KEYS.TOGGLE_FILTER_PANEL_SHOW)}
-            </Button>
-            <Button
-                onClick={handleResetAllFilters}
-                variant="icon"
-                title={t(I18N_KEYS.RESET_ALL_FILTERS_TOOLTIP)}
-                srText={t(I18N_KEYS.RESET_ALL_FILTERS_TOOLTIP)}
-                className="p-2 self-center sm:self-auto flex-shrink-0" 
-            >
-                <Icons.cached className={`${ThemeColors.onPrimaryContainer} w-6 h-6`} />
-            </Button>
-          </div>
 
-          {/* --- 下段: 条件付きフィルター --- */}
-          {isFilterPanelVisible && (
-            <div className="w-full mt-3 flex flex-row flex-wrap items-center gap-3">
-              <div className="min-w-[150px] flex-grow sm:flex-grow-0">
-                <SelectFilter
-                  options={fileTypeFilterOptions}
-                  value={fileTypeFilter}
-                  onChange={(val) => setFileTypeFilter(val as FileTypeFilterOption)}
-                  srLabel={t(I18N_KEYS.FILTER_BY_TYPE_SR_LABEL)}
-                  icon={<Icons.category className="w-4 h-4 text-base leading-none"/>}
-                />
-              </div>
-              <div className="min-w-[150px] flex-grow sm:flex-grow-0">
-                <SelectFilter
-                  options={fileSizeFilterOptions}
-                  value={fileSizeFilter}
-                  onChange={(val) => setFileSizeFilter(val as FileSizeFilterOption)}
-                  srLabel={t(I18N_KEYS.FILTER_BY_SIZE_SR_LABEL)}
-                  icon={<Icons.storage className="w-4 h-4 text-base leading-none"/>}
-                />
-              </div>
-              <div className="w-full sm:w-auto flex-grow sm:flex-grow-0 min-w-[240px]"> 
-                  <DateRangeFilter 
-                      startDate={startDateFilter}
-                      endDate={endDateFilter}
-                      onStartDateChange={setStartDateFilter}
-                      onEndDateChange={setEndDateFilter}
-                  />
-              </div>
+        <main 
+          className={`flex-grow p-4 overflow-y-auto custom-scrollbar relative bg-gray-50 dark:bg-slate-900 ${isUploading ? 'opacity-70 cursor-wait' : ''}`}
+        >
+           {isUploading && (
+            <div className="absolute inset-0 bg-slate-400 bg-opacity-30 flex flex-col items-center justify-center pointer-events-auto z-30 rounded-lg backdrop-blur-sm">
+              <Icons.spinner className={`w-16 h-16 ${ThemeColors.onPrimaryContainer} mb-2`} />
+              <p className={`text-lg font-semibold ${ThemeColors.onPrimaryContainer}`}>{t(I18N_KEYS.SUMMARY_LOADING)}</p> 
             </div>
           )}
-        </div>
-      </header>
-      
-      <main 
-        className={`flex-grow p-4 overflow-y-auto custom-scrollbar relative ${isDraggingOver && !isUploading ? `border-2 border-dashed ${ThemeColors.outline} rounded-lg` : ''} ${isUploading ? 'opacity-70 cursor-wait' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {isDraggingOver && !isUploading && (
-          <div className="absolute inset-0 bg-indigo-500 bg-opacity-20 flex flex-col items-center justify-center pointer-events-none z-10 rounded-lg">
-            <Icons.upload className={`w-16 h-16 ${ThemeColors.onPrimaryContainer} opacity-75 mb-2`} />
-            <p className={`text-lg font-semibold ${ThemeColors.onPrimaryContainer} opacity-75`}>{t(I18N_KEYS.DROP_FILES_HERE_PROMPT)}</p>
-          </div>
-        )}
-         {isUploading && (
-          <div className="absolute inset-0 bg-slate-400 bg-opacity-30 flex flex-col items-center justify-center pointer-events-auto z-30 rounded-lg backdrop-blur-sm">
-            <Icons.spinner className={`w-16 h-16 ${ThemeColors.onPrimaryContainer} mb-2`} />
-            <p className={`text-lg font-semibold ${ThemeColors.onPrimaryContainer}`}>{t(I18N_KEYS.SUMMARY_LOADING)}</p> 
-          </div>
-        )}
-        {!filenameSearchTerm && (currentPathId || breadcrumbs.length > 0) && <BreadcrumbsDisplay path={breadcrumbs} onNavigate={(folderId) => { setCurrentPathId(folderId); setFilenameSearchTerm(''); setSelectedItem(null); }} />}
-        {filenameSearchTerm && <div className="mb-2 text-sm text-gray-500">{t(I18N_KEYS.SEARCH_RESULTS_HEADING, {searchTerm: filenameSearchTerm})}</div>}
-        
-        <div className={`mb-4 flex space-x-3 ${isUploading ? 'pointer-events-none' : ''}`}>
-          <Button 
-            variant="primary" 
-            onClick={() => fileInputRef.current?.click()} 
-            iconLeft={<Icons.upload />}
-            isLoading={isUploading}
-            disabled={isUploading}
-          >
-            {t(I18N_KEYS.UPLOAD_FILE_BUTTON)}
-          </Button>
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple disabled={isUploading} />
-          <Button 
-            variant="secondary" 
-            onClick={() => setIsCreateFolderModalOpen(true)} 
-            iconLeft={<Icons.addFolder />}
-            disabled={isUploading}
-          >
-            {t(I18N_KEYS.CREATE_FOLDER_BUTTON)}
-          </Button>
-        </div>
+          
+          <div className={`p-3 mb-4 rounded-md bg-slate-100 dark:bg-slate-800`}>
+            <div className="flex items-center text-sm text-slate-700 dark:text-slate-300">
+                <Icons.folder className="w-5 h-5 mr-2 text-yellow-500" />
+                <span>現在選択のフォルダ</span>
+            </div>
+            <button 
+                onClick={() => { setCurrentPathId(null); handleFilenameSearchChange(''); setSelectedItem(null); }} 
+                className="mt-1 text-lg font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+                {filenameSearchTerm ? t(I18N_KEYS.MY_DRIVE) : currentFolderName} 
+            </button>
+             {filenameSearchTerm && <div className="text-xs text-slate-500">{t('searchResultsHeading', { searchTerm: filenameSearchTerm })}. <button onClick={() => handleFilenameSearchChange('')} className='underline'>{t('clearButton', {defaultValue: 'Clear search'})}</button></div>}
 
-        <FileList 
-          items={displayedItems} 
-          selectedItemId={selectedItem?.id || null}
-          deletingItemId={deletingItemId}
-          onSelectItem={handleSelectItem}
-          onOpenItem={handleOpenItem}
-          onSummarizeItem={currentUser ? handleSummarizeItem : false}
-          onDeleteItem={currentUser ? handleDeleteItem : false}
-          onDownloadItem={currentUser ? handleDownloadItem : false}
-        />
-      </main>
+             {!filenameSearchTerm && breadcrumbs.length > 0 && (
+                <div className='text-xs text-slate-500 mt-1'>
+                    <button onClick={() => {setCurrentPathId(null); handleFilenameSearchChange(''); setSelectedItem(null);}} className="hover:underline">{t(I18N_KEYS.MY_DRIVE)}</button>
+                    {breadcrumbs.map((b, i) => (
+                        <React.Fragment key={b.id}>
+                            <span className='mx-1'>/</span>
+                            {i === breadcrumbs.length - 1 ? (
+                                <span>{b.name}</span>
+                            ) : (
+                                <button onClick={() => {setCurrentPathId(b.id); setSelectedItem(null);}} className="hover:underline">{b.name}</button>
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+             )}
+          </div>
+          
+          <FileUploadArea 
+            onFileUpload={handleFileUpload}
+            onFileUploadFromDrop={handleFileUploadFromDrop}
+            isUploading={isUploading}
+            targetDirectoryName={currentFolderName}
+            className="mb-4"
+          />
+
+          <div className="flex justify-between items-center mb-3 text-sm text-slate-600 dark:text-slate-400">
+            <Button 
+                variant="secondary"
+                onClick={toggleSortDirection} 
+                className="!p-1 !text-xs !font-normal !bg-transparent hover:!bg-slate-200 dark:hover:!bg-slate-700 flex items-center"
+                iconLeft={sortConfig.direction === 'asc' ? <Icons.arrowUpward className="w-3 h-3 text-xs transform -translate-y-px"/> : <Icons.arrowDownward className="w-3 h-3 text-xs transform -translate-y-px"/>}
+                srText={t(I18N_KEYS.TOGGLE_SORT_ORDER_ARIA)}
+            >
+                [表示順] {t(I18N_KEYS.SORT_BY_NAME)}: {sortConfig.direction === 'asc' ? t(I18N_KEYS.SORT_ORDER_ASC) : t(I18N_KEYS.SORT_ORDER_DESC)}
+            </Button>
+            <span>表示件数: {displayedItems.length}件</span>
+          </div>
+
+          <FileList 
+            items={displayedItems} 
+            selectedItemId={selectedItem?.id || null}
+            deletingItemId={deletingItemId}
+            onSelectItem={handleSelectItem}
+            onOpenItem={handleOpenItem}
+            onSummarizeItem={handleSummarizeItem} 
+            onDeleteItem={handleDeleteItem}     
+            onDownloadItem={handleDownloadItem} 
+            showItemActions={false} 
+          />
+
+          <div className="mt-4 flex justify-end">
+            <button className="px-3 py-1 border border-slate-300 rounded-md text-sm bg-white dark:bg-slate-700 dark:border-slate-600">1</button>
+          </div>
+
+        </main>
+      </div>
 
       <Button
         variant="icon"
@@ -1111,6 +1046,14 @@ const App: React.FC = () => {
           modalClassName="w-[80vw] max-w-screen-lg"
         />
       )}
+      {rawContentFile && (
+        <RawContentViewerModal
+          isOpen={isRawContentViewerOpen}
+          onClose={() => { setIsRawContentViewerOpen(false); setRawContentFile(null); }}
+          file={rawContentFile}
+          modalClassName="w-[80vw] max-w-screen-lg"
+        />
+      )}
       <CreateFolderModal
         isOpen={isCreateFolderModalOpen}
         onClose={() => setIsCreateFolderModalOpen(false)}
@@ -1119,10 +1062,7 @@ const App: React.FC = () => {
        {itemToConfirmDelete && (
         <ConfirmationModal
           isOpen={isConfirmModalOpen}
-          onClose={() => {
-            setIsConfirmModalOpen(false);
-            setItemToConfirmDelete(null);
-          }}
+          onClose={() => { setIsConfirmModalOpen(false); setItemToConfirmDelete(null); }}
           onConfirm={executeConfirmedItemDelete}
           title={t(I18N_KEYS.DELETE_CONFIRM_TITLE)}
           message={t(I18N_KEYS.DELETE_CONFIRM_MESSAGE, { itemName: itemToConfirmDelete.name })}
@@ -1142,15 +1082,7 @@ const App: React.FC = () => {
         isListening={isListening && voiceInputTargetRef.current === 'aichat'}
         modalClassName="w-[80vw] max-w-screen-lg"
       />
-      {snackbar && (
-        <Snackbar
-          key={snackbar.key}
-          message={snackbar.message}
-          type={snackbar.type}
-          isOpen={!!snackbar}
-          onClose={closeSnackbar}
-        />
-      )}
+      {snackbar && ( <Snackbar key={snackbar.key} message={snackbar.message} type={snackbar.type} isOpen={!!snackbar} onClose={closeSnackbar} /> )}
     </div>
   );
 };

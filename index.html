@@ -6,53 +6,7 @@
   <title>AI File Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <style>
-    /* Webkitブラウザ用のカスタムスクロールバー */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #f1f1f1; /* 薄いグレーのトラック */
-      border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #a0aec0; /* Tailwind gray-500 */
-      border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #718096; /* Tailwind gray-600 */
-    }
-    /* Firefox用 */
-    html { /* ページのスクロールバーにhtmlを適用 */
-      scrollbar-width: thin;
-      scrollbar-color: #a0aec0 #f1f1f1;
-    }
-     /* overflowを持つ要素用 */
-    .custom-scrollbar {
-        scrollbar-width: thin;
-        scrollbar-color: #a0aec0 #f1f1f1;
-    }
-
-    /* 堅牢性のためのMaterial Icons基本CSS */
-    .material-icons {
-      font-family: 'Material Icons';
-      font-weight: normal;
-      font-style: normal;
-      font-size: 24px;  /* 推奨アイコンサイズ */
-      display: inline-block;
-      line-height: 1;
-      text-transform: none;
-      letter-spacing: normal;
-      word-wrap: normal;
-      white-space: nowrap;
-      direction: ltr;
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
-      -moz-osx-font-smoothing: grayscale;
-      font-feature-settings: 'liga';
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 <script type="importmap">
 {
   "imports": {
