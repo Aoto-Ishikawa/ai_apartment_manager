@@ -92,14 +92,17 @@ export const I18N_KEYS = {
   UPLOAD_FOLDER_CREATE_ERROR: "uploadFolderCreateError",
   VIEW_RAW_CONTENT_MODAL_TITLE: "VIEW_RAW_CONTENT_MODAL_TITLE",
   OPENING_FILE_BY_DOWNLOAD: "OPENING_FILE_BY_DOWNLOAD",
-  SORT_ORDER_ASC: "sortOrderAsc",
-  SORT_ORDER_DESC: "sortOrderDesc",
-  SORT_BY_NAME: "sortByName",
+  sortOrderAsc: "sortOrderAsc",
+  sortOrderDesc: "sortOrderDesc",
+  sortByName: "sortByName",
   TOGGLE_SORT_ORDER_ARIA: "toggleSortOrderAria",
   DROP_FILES_HERE_OR_CLICK_PROMPT_TITLE: "dropFilesHereOrClickPromptTitle",
   DROP_FILES_HERE_OR_CLICK_PROMPT_SUBTITLE: "dropFilesHereOrClickPromptSubtitle",
   UPLOAD_FOLDER_DRAGGED_DIRECTLY: "uploadFolderDraggedDirectly",
-  CLEAR_BUTTON: "clearButton", // New key for "Clear" button text
+  CLEAR_BUTTON: "clearButton",
+  DOWNLOAD_CONFIRM_TITLE: "downloadConfirmTitle",
+  DOWNLOAD_CONFIRM_MESSAGE: "downloadConfirmMessage",
+  DOWNLOAD_CONFIRM_BUTTON: "downloadConfirmButton",
 };
 
 
@@ -162,7 +165,13 @@ export const Icons = {
   audioFile: (props?: { className?: string }) => <IconBase iconName="audiotrack" className={`text-pink-500 ${props?.className || ''}`} />,
   videoFile: (props?: { className?: string }) => <IconBase iconName="movie" className={`text-red-700 ${props?.className || ''}`} />,
   upload: (props?: { className?: string }) => <IconBase iconName="cloud_upload" className={props?.className} />,
-  download: (props?: { className?: string }) => <IconBase iconName="file_download" className={`text-teal-500 ${props?.className || ''}`} />,
+  download: (props?: { className?: string }) => (
+    <img 
+      src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0iIzM0RDY5NSIvPgogIDxwYXRoIGQ9Ik0xMSAxMnYtN2gxLjV2N2gyLjVMMTIgMTVsLTIuNS0zSDExWiIgZmlsbD0id2hpdGUiLz4KICA8cGF0aCBkPSJNNiAxNkgxNy41IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo="
+      alt=""
+      className={props?.className || 'w-5 h-5'} 
+    />
+  ),
   delete: (props?: { className?: string }) => <IconBase iconName="delete" className={`text-red-500 ${props?.className || ''}`} />,
   summarize: (props?: { className?: string }) => <IconBase iconName="auto_awesome" className={`text-purple-500 ${props?.className || ''}`} />,
   search: (props?: { className?: string }) => <IconBase iconName="search" className={props?.className} />,

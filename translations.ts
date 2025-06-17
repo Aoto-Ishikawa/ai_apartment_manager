@@ -100,6 +100,9 @@ export const translations: Record<Language, Record<string, string>> = {
     dropFilesHereOrClickPromptSubtitle: "Upload to: {folderName}",
     uploadFolderDraggedDirectly: "Folder uploads via drag & drop are processed. Individual files within them will be added.",
     clearButton: "Clear",
+    downloadConfirmTitle: "Confirm Download",
+    downloadConfirmMessage: "Do you want to download \"{fileName}\"?",
+    downloadConfirmButton: "Download",
   },
   ja: {
     appName: "AIファイルマネージャー",
@@ -198,6 +201,9 @@ export const translations: Record<Language, Record<string, string>> = {
     dropFilesHereOrClickPromptSubtitle: "アップロード先: {folderName}",
     uploadFolderDraggedDirectly: "フォルダのドラッグ＆ドロップによるアップロードが処理されます。フォルダ内の個々のファイルが追加されます。",
     clearButton: "クリア",
+    downloadConfirmTitle: "ダウンロードの確認",
+    downloadConfirmMessage: "ファイル「{fileName}」をダウンロードしますか？",
+    downloadConfirmButton: "ダウンロード",
   }
 };
 

@@ -1,4 +1,5 @@
 import { Content } from "@google/genai";
+export type { Content }; // Export Content type
 
 export enum FileType {
   FILE = 'FILE',

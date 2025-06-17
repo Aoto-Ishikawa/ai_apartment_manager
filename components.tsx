@@ -475,15 +475,18 @@ export const FileItem: React.FC<FileItemProps> = ({
       <div className="mr-3 text-xl flex-shrink-0">{getIcon()}</div> 
       <div className="flex-grow truncate">
         <p className="font-medium text-sm">{item.name}</p>
-        {!showActions && item.type === FileType.FILE && item.size != null && ( 
+        {!showActions ? (
              <p className={`text-xs ${CommonStyles.textMuted}`}>
-                {(item.size / 1024).toFixed(1)} KB
+                {item.type === FileType.FILE && item.size != null
+                  ? `${(item.size / 1024).toFixed(1)} KB`
+                  : item.type === FileType.FOLDER
+                  ? t(I18N_KEYS.FILE_TYPE_FOLDERS)
+                  : '\u00A0' /* Non-breaking space for other cases */}
              </p>
-        )}
-        {showActions && ( 
+        ) : ( 
             <p className={`text-xs ${CommonStyles.textMuted}`}>
             {new Date(item.lastModified).toLocaleDateString(locale)}
-            {item.size != null && ` - ${(item.size / 1024).toFixed(1)} KB`}
+            {item.type === FileType.FILE && item.size != null && ` - ${(item.size / 1024).toFixed(1)} KB`}
             </p>
         )}
       </div>
@@ -569,39 +572,6 @@ export const FileList: React.FC<FileListProps> = ({
         />
       ))}
     </div>
-  );
-};
-
-interface FilenameSearchBarProps {
-  onSearch: (term: string) => void;
-  initialTerm?: string;
-}
-
-export const FilenameSearchBar: React.FC<FilenameSearchBarProps> = ({ onSearch, initialTerm = "" }) => {
-  const { t } = useTranslation();
-  const [searchTerm, setSearchTerm] = useState(initialTerm);
-
-  useEffect(() => {
-    setSearchTerm(initialTerm);
-  }, [initialTerm]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch(searchTerm);
-  };
-
-  return (
-    <form onSubmit={handleSearch} className="flex items-center w-full relative mb-0" aria-label={t(I18N_KEYS.FILENAME_SEARCH_PLACEHOLDER)}>
-      <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${ThemeColors.onSurfaceVariant}`} aria-hidden="true"><Icons.search /></div>
-      <Input 
-        type="text"
-        placeholder={t(I18N_KEYS.FILENAME_SEARCH_PLACEHOLDER)}
-        className="pl-12 pr-4 py-3 text-sm" 
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        srLabel={t(I18N_KEYS.FILENAME_SEARCH_PLACEHOLDER)}
-      />
-    </form>
   );
 };
 
@@ -714,7 +684,6 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = ({ isOpen, on
     </Modal>
   );
 };
-
 
 interface BreadcrumbsProps {
   path: BreadcrumbItem[];
